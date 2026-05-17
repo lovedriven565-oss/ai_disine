@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Sparkles, Check, Loader2, Zap } from 'lucide-react';
+import { X, Sparkles, Check, Loader2, Zap, Star } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { PACKS, purchasePack, type Pack } from '../services/billing';
 import { formatPrice } from '../lib/format';
@@ -10,6 +10,8 @@ export default function Paywall() {
   const closePaywall = useAppStore((s) => s.closePaywall);
   const addCredits = useAppStore((s) => s.addCredits);
   const currency = useAppStore((s) => s.currency);
+  const user = useAppStore((s) => s.user);
+  const showToast = useAppStore((s) => s.showToast);
 
   const [selectedId, setSelectedId] = useState<string>('pro');
   const [loading, setLoading] = useState(false);
@@ -23,16 +25,28 @@ export default function Paywall() {
     haptic('medium');
     setLoading(true);
     try {
-      const res = await purchasePack(selectedId);
-      addCredits(res.pack.generations);
-      setSuccessPack(res.pack);
-      haptic('success');
-      setTimeout(() => {
-        setSuccessPack(null);
-        closePaywall();
-      }, 1600);
-    } catch {
+      const res = await purchasePack(selectedId, user?.id);
+      if (res.status === 'paid') {
+        addCredits(res.pack.generations);
+        setSuccessPack(res.pack);
+        haptic('success');
+        showToast({ kind: 'success', message: `+${res.pack.generations} генерации зачислены` });
+        setTimeout(() => {
+          setSuccessPack(null);
+          closePaywall();
+        }, 1600);
+      } else if (res.status === 'cancelled') {
+        showToast({ kind: 'info', message: 'Оплата отменена' });
+      } else if (res.status === 'pending') {
+        showToast({ kind: 'info', message: 'Платёж в обработке. Баланс обновится автоматически.' });
+      } else {
+        haptic('error');
+        showToast({ kind: 'error', message: 'Оплата не прошла. Попробуйте снова.' });
+      }
+    } catch (e) {
+      console.error(e);
       haptic('error');
+      showToast({ kind: 'error', message: 'Ошибка создания счёта' });
     } finally {
       setLoading(false);
     }
@@ -114,16 +128,12 @@ export default function Paywall() {
                   </div>
 
                   <div className="text-right">
-                    <div className="font-semibold text-on-surface">
-                      {formatPrice(p.priceRub, p.priceUsd, currency)}
+                    <div className="font-semibold text-on-surface flex items-center gap-1 justify-end">
+                      <Star size={14} className="text-yellow-300 fill-yellow-300" />
+                      <span className="tabular-nums">{p.priceStars}</span>
                     </div>
                     <div className="text-[11px] text-on-surface-variant">
-                      {formatPrice(
-                        Math.round(p.priceRub / p.generations),
-                        +(p.priceUsd / p.generations).toFixed(2),
-                        currency,
-                      )}{' '}
-                      / шт
+                      ≈ {formatPrice(p.priceRub, p.priceUsd, currency)}
                     </div>
                   </div>
                 </div>
@@ -150,14 +160,16 @@ export default function Paywall() {
             </>
           ) : (
             <>
-              <Sparkles size={18} />
-              Купить за {formatPrice(selected.priceRub, selected.priceUsd, currency)}
+              <Star size={18} className="fill-yellow-300 text-yellow-300" />
+              Купить за {selected.priceStars} Stars
             </>
           )}
         </button>
 
-        <p className="text-center text-[11px] text-on-surface-variant mt-3 px-4">
-          Оплата — это демо. Реальный платежный шлюз будет подключён позже.
+        <p className="text-center text-[11px] text-on-surface-variant mt-3 px-4 leading-relaxed">
+          Оплата в Telegram Stars · мгновенное начисление после платежа.
+          <br />
+          Нажимая «Купить», вы соглашаетесь с условиями сервиса.
         </p>
       </div>
 

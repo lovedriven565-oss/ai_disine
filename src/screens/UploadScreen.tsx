@@ -3,24 +3,7 @@ import { Sparkles, Zap, Check, ImagePlus, X } from 'lucide-react';
 import TopAppBar from '../components/ui/TopAppBar';
 import { useAppStore } from '../store/useAppStore';
 import { haptic } from '../services/telegram';
-
-const STYLES = [
-  {
-    id: 'scandinavian',
-    label: 'Скандинавский',
-    img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDsbKw5UkXdZ8xHDFSFguPVhuaE1F1j87EN7FMrrU3Dj5BQVcGKVenQUJu9DIdTrjYqf4c8SnBsW4Zn5IRO-7IfF5q_Uy0AlTIyuYGkl_xsXB6cEW7gMyxoJ0XHHMMl5oI4H6hkM4-IDATFWUTFvzJVAFAWBjgXa8ZejbmlubrMLIi6qNWlzSZovdc9LoT2CcrxqlJtu704tOxDBs9jjWUKJFiBCl3u0u7Jsu4mO7VsNYzcd2RQfTXaTbQdKNans1cdU531J6rm6xAo',
-  },
-  {
-    id: 'loft',
-    label: 'Лофт',
-    img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDBQiCCd3qudKk6_uQB1ZxfzkoCpNSJRaG0F_X1NeZgwxHW_kzuiy3-vSCbGK93kr467XNGGU9gluS12WQTsu33ChCJTOMabjcHw0thgIypbndjE6BIA2FkvA1ZDznkQ6XkSgBdOB34txuMdpVrTEruyZQ21647ydJf8HVCaNprwwqjWMVf_LktdYEIFXIw9xIgoYnZ3jSwzGB34b_eMWV35GySsFQDTf1DtGhgdRIYq3Fm8-DK7d-CMV7Q8yott7ZqlCyU8dmaXpkB',
-  },
-  {
-    id: 'neoclassic',
-    label: 'Неоклассика',
-    img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA7ybKcdNYtoL9zFL0LPo1uIlsv_UM7fN-hF4av_SDSpHb8Na5hxvtO7hVpBZ-dlHDnu9fYcyk2pAt40RL2qaRFxc4Y5eP6EKkS2QEqIMZpZGtpvXEAQQbaLyKM57BYTIHVnpRX8sfM553cycKyc8hl17Y7bDqX10PoBcGdfYy9gJ5AsaMz6nMRATSxKm8jiUwHNAEVo5tmgxWariJRTr-jx1gEUR1HReTiy0VcObyoufxoacs9oqCmmUqNwOkdpGuBUhAevfcG_esk',
-  },
-];
+import { ALL_STYLES, type StyleId } from '../../shared/prompts';
 
 const DEMO_BEFORE =
   'https://lh3.googleusercontent.com/aida/ADBb0ugaplghrz_oaJY6SIdBcLyEG2MPaveTfWVDruU1uh7YnfwHRgY-wNsF5-fW4X1OMd53MC31xK0HmJOMSQklDI9DrO6mL2_hR3IiazSTs1iOFCNRC_tMhL_Vv_bqR18GI-1zkAKiS8lMJaXU02sBTraWRVSTabQZ_F037YwjjVWXM8VIVwsfamYVsVZHfaHsJPOJOT9K1id6acZl_9RLWlyTVnA-ssmlx1ULbY-6cDnVwEFw5SqISEzYPI0';
@@ -32,7 +15,7 @@ interface Props {
 }
 
 export default function UploadScreen({ onGenerate }: Props) {
-  const [selectedStyle, setSelectedStyle] = useState<string>('scandinavian');
+  const [selectedStyle, setSelectedStyle] = useState<StyleId>('scandinavian');
   const [sliderPos, setSliderPos] = useState(50);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -219,7 +202,7 @@ export default function UploadScreen({ onGenerate }: Props) {
         <section className="flex flex-col gap-3">
           <h2 className="font-headline-md text-[18px] font-semibold text-on-surface">Выберите стиль</h2>
           <div className="flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 -mx-4 px-4 no-scrollbar">
-            {STYLES.map((style) => {
+            {ALL_STYLES.map((style) => {
               const active = style.id === selectedStyle;
               return (
                 <button
@@ -228,7 +211,7 @@ export default function UploadScreen({ onGenerate }: Props) {
                     haptic('light');
                     setSelectedStyle(style.id);
                   }}
-                  className={`snap-start shrink-0 w-40 rounded-2xl p-2.5 flex flex-col gap-2.5 relative overflow-hidden text-left transition-all active:scale-95 border ${
+                  className={`snap-start shrink-0 w-44 rounded-2xl p-2.5 flex flex-col gap-2 relative overflow-hidden text-left transition-all active:scale-95 border ${
                     active
                       ? 'border-primary bg-primary/10 ring-2 ring-primary/60'
                       : 'border-white/10 bg-white/[0.04] hover:bg-white/[0.08]'
@@ -236,24 +219,29 @@ export default function UploadScreen({ onGenerate }: Props) {
                 >
                   <div className="w-full h-24 rounded-xl overflow-hidden bg-surface-variant">
                     <img
-                      src={style.img}
+                      src={style.thumbnail}
                       alt={style.label}
                       className={`w-full h-full object-cover ${active ? '' : 'opacity-80'}`}
                     />
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={`text-[13px] font-semibold ${
-                        active ? 'text-on-surface' : 'text-on-surface-variant'
-                      }`}
-                    >
-                      {style.label}
-                    </span>
-                    {active && (
-                      <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center">
-                        <Check size={10} className="text-surface" strokeWidth={3} />
-                      </div>
-                    )}
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`text-[13px] font-semibold ${
+                          active ? 'text-on-surface' : 'text-on-surface-variant'
+                        }`}
+                      >
+                        {style.label}
+                      </span>
+                      {active && (
+                        <div className="w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                          <Check size={10} className="text-surface" strokeWidth={3} />
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-on-surface-variant leading-snug mt-0.5 line-clamp-2">
+                      {style.description}
+                    </p>
                   </div>
                 </button>
               );

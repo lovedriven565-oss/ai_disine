@@ -4,12 +4,11 @@ import TopAppBar from '../components/ui/TopAppBar';
 import { useAppStore } from '../store/useAppStore';
 import { formatPrice } from '../lib/format';
 import { haptic, shareToTelegram } from '../services/telegram';
+import { ALL_STYLES } from '../../shared/prompts';
 
-const STYLE_LABELS: Record<string, string> = {
-  scandinavian: 'Scandinavian Modern',
-  loft:         'Industrial Loft',
-  neoclassic:   'Neo-Classical',
-};
+const STYLE_LABEL_BY_ID: Record<string, string> = Object.fromEntries(
+  ALL_STYLES.map((s) => [s.id, s.label]),
+);
 
 const PRODUCTS = [
   {
@@ -46,7 +45,7 @@ export default function ResultScreen({ onReset }: Props) {
 
   const before = lastResult?.before;
   const after = lastResult?.after;
-  const styleLabel = STYLE_LABELS[lastResult?.style || 'scandinavian'] || 'AI Staged';
+  const styleLabel = STYLE_LABEL_BY_ID[lastResult?.style || 'scandinavian'] || 'AI Staged';
 
   const handleShare = () => {
     haptic('medium');
