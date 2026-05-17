@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle2, Cpu, Armchair, Brush, Sparkles } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
-import { generateStaging, type GenerationProgress, type GenerationStage } from '../services/replicate';
+import {
+  generateStaging,
+  InsufficientCreditsError,
+  type GenerationProgress,
+  type GenerationStage,
+} from '../services/replicate';
 import { haptic } from '../services/telegram';
 
 interface Props {
@@ -25,8 +30,14 @@ const STEPS: StepDef[] = [
 export default function LoadingScreen({ style, onDone }: Props) {
   const setLastResult = useAppStore((s) => s.setLastResult);
   const consumeCredit = useAppStore((s) => s.consumeCredit);
+  const addCredits = useAppStore((s) => s.addCredits);
+  const setBalance = useAppStore((s) => s.setBalance);
+  const refreshFromServer = useAppStore((s) => s.refreshFromServer);
   const uploadedPhoto = useAppStore((s) => s.uploadedPhoto);
+  const tgUser = useAppStore((s) => s.user);
   const showToast = useAppStore((s) => s.showToast);
+  const setCreateStep = useAppStore((s) => s.setCreateStep);
+  const openPaywall = useAppStore((s) => s.openPaywall);
 
   const [progress, setProgress] = useState<GenerationProgress>({
     stage: 'queued',
@@ -36,26 +47,48 @@ export default function LoadingScreen({ style, onDone }: Props) {
 
   useEffect(() => {
     let cancelled = false;
+    // Optimistic local decrement for instant UI feedback. Server is the
+    // authoritative source: we'll overwrite the balance with `res.balance`
+    // when the API responds, or refund and refresh on failure.
     consumeCredit();
 
     (async () => {
       try {
         const res = await generateStaging(
-          { style, imageUrl: uploadedPhoto || undefined },
+          {
+            style,
+            imageUrl: uploadedPhoto || undefined,
+            telegramUserId: tgUser?.id,
+          },
           (p) => {
             if (!cancelled) setProgress(p);
           },
         );
         if (cancelled) return;
-        // Use the uploaded photo as the "before" when available, demo otherwise.
+        // Reconcile balance with server truth when backend mode is on.
+        if (typeof res.balance === 'number') setBalance(res.balance);
         const before = uploadedPhoto || res.output.before;
         setLastResult({ before, after: res.output.after, style });
         haptic('success');
         onDone();
       } catch (e) {
+        if (cancelled) return;
+        // Server rejected the call - refund optimistic spend, surface paywall.
+        if (e instanceof InsufficientCreditsError) {
+          setBalance(e.balance);
+          haptic('error');
+          showToast({ kind: 'error', message: 'Закончились генерации. Купите ещё.' });
+          setCreateStep('upload');
+          openPaywall();
+          return;
+        }
         console.error(e);
         haptic('error');
+        // Generic failure: roll back optimistic spend then resync.
+        addCredits(1);
+        void refreshFromServer();
         showToast({ kind: 'error', message: 'Не удалось сгенерировать. Попробуйте снова.' });
+        setCreateStep('upload');
       }
     })();
 

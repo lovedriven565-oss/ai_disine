@@ -52,9 +52,16 @@ interface CreateInvoiceResponse {
 }
 
 const createInvoice = async (packId: string, telegramUserId?: number): Promise<CreateInvoiceResponse> => {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  try {
+    const initData = WebApp?.initData;
+    if (initData) headers['x-tg-init-data'] = initData;
+  } catch {
+    /* not in TG */
+  }
   const res = await fetch('/api/billing/create-invoice', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ packId, telegramUserId }),
   });
   if (!res.ok) {

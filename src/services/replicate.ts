@@ -7,6 +7,8 @@
  * flow - the public signature of `generateStaging` must stay the same.
  */
 
+import WebApp from '@twa-dev/sdk';
+
 export type GenerationStage =
   | 'queued'
   | 'analyzing_geometry'
@@ -24,7 +26,10 @@ export interface GenerationProgress {
 
 export interface GenerationRequest {
   imageUrl?: string;
-  style: string; // e.g. 'scandinavian' | 'loft' | 'neoclassic'
+  style: string;
+  roomType?: string;
+  /** Dev-mode fallback so the backend can identify the user without initData. */
+  telegramUserId?: number;
 }
 
 export interface GenerationResult {
@@ -35,6 +40,19 @@ export interface GenerationResult {
     after: string;
   };
   durationMs: number;
+  /** Authoritative balance after the server charged for the generation. */
+  balance?: number;
+}
+
+/** Thrown when the server rejected the call because of zero balance. */
+export class InsufficientCreditsError extends Error {
+  status = 403;
+  balance: number;
+  constructor(balance: number) {
+    super('insufficient_credits');
+    this.name = 'InsufficientCreditsError';
+    this.balance = balance;
+  }
 }
 
 const DEMO_BEFORE =
@@ -68,15 +86,43 @@ async function generateViaBackend(
   onProgress?: (p: GenerationProgress) => void,
 ): Promise<GenerationResult> {
   const startedAt = Date.now();
-  // Drive UX progress in parallel with the network call.
-  const progressPromise = generateStagingMock(req, onProgress);
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  try {
+    const initData = WebApp?.initData;
+    if (initData) headers['x-tg-init-data'] = initData;
+  } catch {
+    /* not in TG */
+  }
+
+  // Fire the request first so we can short-circuit on 403 instead of waiting
+  // the full 14s of mock progress.
   const apiPromise = fetch('/api/predict', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(req),
-  }).then((r) => r.json());
+  });
 
-  const [api] = await Promise.all([apiPromise, progressPromise]);
+  const progressPromise = generateStagingMock(req, onProgress);
+
+  const apiRes = await apiPromise;
+  if (apiRes.status === 403) {
+    const body = (await apiRes.json().catch(() => ({}))) as { balance?: number };
+    throw new InsufficientCreditsError(body.balance ?? 0);
+  }
+  if (!apiRes.ok) {
+    throw new Error(`Generation failed: HTTP ${apiRes.status}`);
+  }
+  const api = (await apiRes.json()) as {
+    id?: string;
+    status?: 'succeeded' | 'failed';
+    output?: { after?: string };
+    balance?: number;
+  };
+
+  // Make sure the UX progress finishes before we resolve.
+  await progressPromise;
+
   return {
     id: api.id ?? `api_${Date.now()}`,
     status: api.status ?? 'succeeded',
@@ -85,6 +131,7 @@ async function generateViaBackend(
       after: api.output?.after || DEMO_AFTER,
     },
     durationMs: Date.now() - startedAt,
+    balance: api.balance,
   };
 }
 

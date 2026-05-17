@@ -9,6 +9,7 @@ export default function Paywall() {
   const open = useAppStore((s) => s.paywallOpen);
   const closePaywall = useAppStore((s) => s.closePaywall);
   const addCredits = useAppStore((s) => s.addCredits);
+  const refreshFromServer = useAppStore((s) => s.refreshFromServer);
   const currency = useAppStore((s) => s.currency);
   const user = useAppStore((s) => s.user);
   const showToast = useAppStore((s) => s.showToast);
@@ -27,10 +28,16 @@ export default function Paywall() {
     try {
       const res = await purchasePack(selectedId, user?.id);
       if (res.status === 'paid') {
+        // Optimistic instant UX...
         addCredits(res.pack.generations);
         setSuccessPack(res.pack);
         haptic('success');
         showToast({ kind: 'success', message: `+${res.pack.generations} генерации зачислены` });
+        // ...then reconcile with the server (webhook is the source of truth).
+        // Small delay so the webhook has a chance to land before we re-read.
+        setTimeout(() => {
+          void refreshFromServer();
+        }, 1500);
         setTimeout(() => {
           setSuccessPack(null);
           closePaywall();

@@ -15,7 +15,7 @@ export default function App() {
 
   useEffect(() => {
     initTelegram();
-    initSession();
+    void initSession();
   }, [initSession]);
 
   // Hide the bottom bar when the creation pipeline is mid-flight to remove UI noise.

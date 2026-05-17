@@ -15,6 +15,7 @@ import {
   BOT_USERNAME,
   APP_SHORT_NAME,
 } from '../services/telegram';
+import { syncUser, type ServerUser } from '../services/supabase';
 
 export type Tab = 'create' | 'profile';
 export type CreateStep = 'upload' | 'loading' | 'result';
@@ -49,8 +50,16 @@ interface AppState {
   // toast
   toast: { kind: 'success' | 'error' | 'info'; message: string } | null;
 
+  // server sync state
+  serverUserId: string | null;
+  syncing: boolean;
+  lastSyncError: string | null;
+
   // actions
-  initSession: () => void;
+  initSession: () => Promise<void>;
+  refreshFromServer: () => Promise<void>;
+  applyServerUser: (u: ServerUser) => void;
+  setBalance: (n: number) => void;
   setTab: (tab: Tab) => void;
   setCreateStep: (s: CreateStep) => void;
   consumeCredit: () => boolean;
@@ -95,23 +104,69 @@ export const useAppStore = create<AppState>()(
       uploadedFileName: null,
       lastResult: null,
       toast: null,
+      serverUserId: null,
+      syncing: false,
+      lastSyncError: null,
 
-      initSession: () => {
+      initSession: async () => {
         if (get().initialized) return;
         const user = getTelegramUser();
         const startParam = getStartParam();
+        const localCode = buildReferralCode(user.id);
         const inboundRef =
-          startParam && startParam.startsWith('ref_') && startParam !== buildReferralCode(user.id)
+          startParam && startParam.startsWith('ref_') && startParam !== localCode
             ? startParam
             : null;
+
+        // Optimistic local hydrate while we hit the backend.
         set({
           user,
           initialized: true,
           currency: detectCurrency(user.language_code),
-          referralCode: get().referralCode || buildReferralCode(user.id),
+          referralCode: get().referralCode || localCode,
           referredBy: get().referredBy || inboundRef,
         });
+
+        await get().refreshFromServer();
       },
+
+      refreshFromServer: async () => {
+        const user = get().user;
+        if (!user) return;
+        set({ syncing: true, lastSyncError: null });
+        try {
+          const { user: srv } = await syncUser({
+            telegramUserId: user.id,
+            user: {
+              username: user.username,
+              first_name: user.first_name,
+              last_name: user.last_name,
+              language_code: user.language_code,
+            },
+            referredBy: get().referredBy,
+          });
+          get().applyServerUser(srv);
+        } catch (e) {
+          // Backend down? Fall back to local optimistic state.
+          // eslint-disable-next-line no-console
+          console.warn('[store] refreshFromServer failed', e);
+          set({ lastSyncError: e instanceof Error ? e.message : 'sync_failed' });
+        } finally {
+          set({ syncing: false });
+        }
+      },
+
+      applyServerUser: (srv) =>
+        set({
+          serverUserId: srv.id,
+          balance: srv.balance,
+          totalGenerated: srv.total_generated,
+          referralCode: srv.referral_code,
+          referredBy: srv.referred_by,
+          invitedFriends: srv.invited_friends,
+        }),
+
+      setBalance: (n) => set({ balance: Math.max(0, n) }),
 
       setTab: (tab) => set({ tab }),
       setCreateStep: (createStep) => set({ createStep }),
