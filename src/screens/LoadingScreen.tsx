@@ -25,6 +25,8 @@ const STEPS: StepDef[] = [
 export default function LoadingScreen({ style, onDone }: Props) {
   const setLastResult = useAppStore((s) => s.setLastResult);
   const consumeCredit = useAppStore((s) => s.consumeCredit);
+  const uploadedPhoto = useAppStore((s) => s.uploadedPhoto);
+  const showToast = useAppStore((s) => s.showToast);
 
   const [progress, setProgress] = useState<GenerationProgress>({
     stage: 'queued',
@@ -39,18 +41,21 @@ export default function LoadingScreen({ style, onDone }: Props) {
     (async () => {
       try {
         const res = await generateStaging(
-          { style },
+          { style, imageUrl: uploadedPhoto || undefined },
           (p) => {
             if (!cancelled) setProgress(p);
           },
         );
         if (cancelled) return;
-        setLastResult({ before: res.output.before, after: res.output.after, style });
+        // Use the uploaded photo as the "before" when available, demo otherwise.
+        const before = uploadedPhoto || res.output.before;
+        setLastResult({ before, after: res.output.after, style });
         haptic('success');
         onDone();
       } catch (e) {
         console.error(e);
         haptic('error');
+        showToast({ kind: 'error', message: 'Не удалось сгенерировать. Попробуйте снова.' });
       }
     })();
 
@@ -77,7 +82,11 @@ export default function LoadingScreen({ style, onDone }: Props) {
         <div className="relative w-full aspect-[4/5] rounded-3xl border border-white/10 bg-surface-container/50 backdrop-blur-xl shadow-[0_24px_60px_rgba(0,0,0,0.5)] p-4 flex flex-col overflow-hidden">
           {/* Scanning preview */}
           <div className="relative flex-1 rounded-2xl overflow-hidden border border-white/5 mb-4">
-            <div className="absolute inset-0 bg-[url('https://lh3.googleusercontent.com/aida-public/AB6AXuAY29chiM74D1z0XistXwSUkacucUvYdPQtY2H2XN7-N1YhqWdvyV3f3A8Hu71CS_g4Oi3P328Dk6c2tuM9idkhxMoog3cUzr5m0WAD7LTRmM2hRfdA0JSHl9CQCcR9X0uKWKI2Lg3hp0__QHGZV1PQnNelxnYO2t3wSjCa6P4vWrIz-hWb0Za8zTtXKxCHSu3RC9ZFuNSdboShZAJn_Bodt3DFZLYHu0oBSvyssKjPT27Z2BZXA8_cmQsdZZ-zlPCJcAuL-vZ_2Hre')] bg-cover bg-center opacity-60" />
+            {uploadedPhoto ? (
+              <img src={uploadedPhoto} alt="" className="absolute inset-0 w-full h-full object-cover opacity-70" />
+            ) : (
+              <div className="absolute inset-0 bg-[url('https://lh3.googleusercontent.com/aida-public/AB6AXuAY29chiM74D1z0XistXwSUkacucUvYdPQtY2H2XN7-N1YhqWdvyV3f3A8Hu71CS_g4Oi3P328Dk6c2tuM9idkhxMoog3cUzr5m0WAD7LTRmM2hRfdA0JSHl9CQCcR9X0uKWKI2Lg3hp0__QHGZV1PQnNelxnYO2t3wSjCa6P4vWrIz-hWb0Za8zTtXKxCHSu3RC9ZFuNSdboShZAJn_Bodt3DFZLYHu0oBSvyssKjPT27Z2BZXA8_cmQsdZZ-zlPCJcAuL-vZ_2Hre')] bg-cover bg-center opacity-60" />
+            )}
             <div className="absolute top-1/4 left-[10%] w-[30%] h-[40%] border-2 border-primary/60 border-dashed bg-primary/10 rounded-xl flex items-center justify-center">
               <Armchair className="text-primary" size={22} />
             </div>

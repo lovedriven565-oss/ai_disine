@@ -46,13 +46,46 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Public, production-ready entrypoint. Always call this from screens.
- * Today: returns a mock. Tomorrow: swap the body for a real Replicate call.
+ *
+ * Default: pure client-side mock with progress callbacks.
+ * If `VITE_USE_BACKEND === 'true'`, calls our Express /api/predict endpoint
+ * while still emitting client-side progress events so UX stays identical
+ * when we later flip the backend to real Replicate.
  */
 export async function generateStaging(
   req: GenerationRequest,
   onProgress?: (p: GenerationProgress) => void,
 ): Promise<GenerationResult> {
+  const useBackend = (import.meta.env.VITE_USE_BACKEND as string | undefined) === 'true';
+  if (useBackend) {
+    return generateViaBackend(req, onProgress);
+  }
   return generateStagingMock(req, onProgress);
+}
+
+async function generateViaBackend(
+  req: GenerationRequest,
+  onProgress?: (p: GenerationProgress) => void,
+): Promise<GenerationResult> {
+  const startedAt = Date.now();
+  // Drive UX progress in parallel with the network call.
+  const progressPromise = generateStagingMock(req, onProgress);
+  const apiPromise = fetch('/api/predict', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  }).then((r) => r.json());
+
+  const [api] = await Promise.all([apiPromise, progressPromise]);
+  return {
+    id: api.id ?? `api_${Date.now()}`,
+    status: api.status ?? 'succeeded',
+    output: {
+      before: req.imageUrl || DEMO_BEFORE,
+      after: api.output?.after || DEMO_AFTER,
+    },
+    durationMs: Date.now() - startedAt,
+  };
 }
 
 async function generateStagingMock(

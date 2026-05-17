@@ -8,7 +8,13 @@
  */
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { getTelegramUser, type TelegramUser, BOT_USERNAME, APP_SHORT_NAME } from '../services/telegram';
+import {
+  getTelegramUser,
+  getStartParam,
+  type TelegramUser,
+  BOT_USERNAME,
+  APP_SHORT_NAME,
+} from '../services/telegram';
 
 export type Tab = 'create' | 'profile';
 export type CreateStep = 'upload' | 'loading' | 'result';
@@ -29,11 +35,19 @@ interface AppState {
   balance: number;
   totalGenerated: number;
   referralCode: string;
+  referredBy: string | null;
   invitedFriends: number;
   paywallOpen: boolean;
 
+  // upload pipeline
+  uploadedPhoto: string | null; // data URL
+  uploadedFileName: string | null;
+
   // last result
   lastResult: { before: string; after: string; style: string } | null;
+
+  // toast
+  toast: { kind: 'success' | 'error' | 'info'; message: string } | null;
 
   // actions
   initSession: () => void;
@@ -44,7 +58,9 @@ interface AppState {
   registerReferralBonus: () => void;
   openPaywall: () => void;
   closePaywall: () => void;
+  setUploadedPhoto: (dataUrl: string | null, fileName?: string) => void;
   setLastResult: (r: AppState['lastResult']) => void;
+  showToast: (t: AppState['toast']) => void;
   reset: () => void;
 }
 
@@ -72,18 +88,28 @@ export const useAppStore = create<AppState>()(
       balance: FREE_ON_START,
       totalGenerated: 0,
       referralCode: '',
+      referredBy: null,
       invitedFriends: 0,
       paywallOpen: false,
+      uploadedPhoto: null,
+      uploadedFileName: null,
       lastResult: null,
+      toast: null,
 
       initSession: () => {
         if (get().initialized) return;
         const user = getTelegramUser();
+        const startParam = getStartParam();
+        const inboundRef =
+          startParam && startParam.startsWith('ref_') && startParam !== buildReferralCode(user.id)
+            ? startParam
+            : null;
         set({
           user,
           initialized: true,
           currency: detectCurrency(user.language_code),
           referralCode: get().referralCode || buildReferralCode(user.id),
+          referredBy: get().referredBy || inboundRef,
         });
       },
 
@@ -108,7 +134,12 @@ export const useAppStore = create<AppState>()(
       openPaywall: () => set({ paywallOpen: true }),
       closePaywall: () => set({ paywallOpen: false }),
 
+      setUploadedPhoto: (dataUrl, fileName) =>
+        set({ uploadedPhoto: dataUrl, uploadedFileName: fileName ?? null }),
+
       setLastResult: (lastResult) => set({ lastResult }),
+
+      showToast: (toast) => set({ toast }),
 
       reset: () =>
         set({
@@ -117,6 +148,8 @@ export const useAppStore = create<AppState>()(
           invitedFriends: 0,
           createStep: 'upload',
           tab: 'create',
+          uploadedPhoto: null,
+          uploadedFileName: null,
           lastResult: null,
         }),
     }),
@@ -128,6 +161,7 @@ export const useAppStore = create<AppState>()(
         totalGenerated: s.totalGenerated,
         invitedFriends: s.invitedFriends,
         referralCode: s.referralCode,
+        referredBy: s.referredBy,
       }),
     },
   ),

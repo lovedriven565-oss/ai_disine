@@ -52,6 +52,25 @@ export const getTelegramUser = (): TelegramUser => {
   };
 };
 
+/**
+ * Reads the start_param sent by Telegram (set via t.me/BOT/app?startapp=XYZ).
+ * Falls back to the `?tgWebAppStartParam=...` URL query for browser previews.
+ */
+export const getStartParam = (): string | null => {
+  try {
+    const fromTg = WebApp.initDataUnsafe?.start_param;
+    if (fromTg) return fromTg;
+  } catch {
+    /* noop */
+  }
+  try {
+    const url = new URL(window.location.href);
+    return url.searchParams.get('tgWebAppStartParam') || url.searchParams.get('startapp');
+  } catch {
+    return null;
+  }
+};
+
 /** Haptic helper that no-ops outside TG. */
 export const haptic = (type: 'light' | 'medium' | 'heavy' | 'success' | 'error' = 'light') => {
   try {
@@ -81,6 +100,8 @@ export const shareToTelegram = (url: string, text: string): void => {
   }
 };
 
-/** Bot username, used to compose referral links. Replace with env in prod. */
-export const BOT_USERNAME = 'AiStagingBot';
-export const APP_SHORT_NAME = 'app';
+/** Bot username + app short name, sourced from Vite env with safe defaults. */
+export const BOT_USERNAME =
+  (import.meta.env.VITE_TG_BOT_USERNAME as string | undefined) || 'AiStagingBot';
+export const APP_SHORT_NAME =
+  (import.meta.env.VITE_TG_APP_SHORT_NAME as string | undefined) || 'app';

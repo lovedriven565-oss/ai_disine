@@ -5,6 +5,7 @@ import { initTelegram } from './services/telegram';
 import CreateFlow from './screens/CreateFlow';
 import ProfileScreen from './screens/ProfileScreen';
 import BottomTabBar from './components/ui/BottomTabBar';
+import Toast from './components/ui/Toast';
 import Paywall from './components/Paywall';
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
       {tab === 'create' ? <CreateFlow /> : <ProfileScreen />}
       {!hideTabBar && <BottomTabBar />}
       <Paywall />
+      <Toast />
     </div>
   );
 }

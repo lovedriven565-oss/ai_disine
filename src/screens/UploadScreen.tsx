@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { CloudUpload, Sparkles, Zap, Check } from 'lucide-react';
+import { useRef, useState, type ChangeEvent, type MouseEvent } from 'react';
+import { Sparkles, Zap, Check, ImagePlus, X } from 'lucide-react';
 import TopAppBar from '../components/ui/TopAppBar';
 import { useAppStore } from '../store/useAppStore';
 import { haptic } from '../services/telegram';
@@ -34,12 +34,53 @@ interface Props {
 export default function UploadScreen({ onGenerate }: Props) {
   const [selectedStyle, setSelectedStyle] = useState<string>('scandinavian');
   const [sliderPos, setSliderPos] = useState(50);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const balance = useAppStore((s) => s.balance);
   const openPaywall = useAppStore((s) => s.openPaywall);
+  const uploadedPhoto = useAppStore((s) => s.uploadedPhoto);
+  const uploadedFileName = useAppStore((s) => s.uploadedFileName);
+  const setUploadedPhoto = useAppStore((s) => s.setUploadedPhoto);
+  const showToast = useAppStore((s) => s.showToast);
+
+  const handlePickFile = () => {
+    haptic('light');
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showToast({ kind: 'error', message: 'Загрузите файл с изображением' });
+      return;
+    }
+    if (file.size > 12 * 1024 * 1024) {
+      showToast({ kind: 'error', message: 'Размер фото больше 12 МБ' });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setUploadedPhoto(reader.result as string, file.name);
+      haptic('success');
+    };
+    reader.onerror = () => showToast({ kind: 'error', message: 'Не удалось прочитать файл' });
+    reader.readAsDataURL(file);
+  };
+
+  const clearPhoto = (e: MouseEvent) => {
+    e.stopPropagation();
+    haptic('light');
+    setUploadedPhoto(null);
+  };
 
   const handleGenerate = () => {
     haptic('medium');
+    if (!uploadedPhoto) {
+      showToast({ kind: 'info', message: 'Сначала загрузите фото комнаты' });
+      handlePickFile();
+      return;
+    }
     if (balance <= 0) {
       openPaywall();
       return;
@@ -68,10 +109,54 @@ export default function UploadScreen({ onGenerate }: Props) {
       <main className="px-4 pt-4 flex flex-col gap-5">
         {/* Upload zone */}
         <section className="flex flex-col gap-2">
-          <div className="relative w-full h-16 rounded-2xl border-2 border-dashed border-primary/50 overflow-hidden bg-surface-container flex items-center justify-center gap-3 cursor-pointer hover:border-primary transition-colors px-4">
-            <CloudUpload className="text-primary" size={22} />
-            <p className="text-[14px] text-on-surface">Загрузить фото пустой комнаты</p>
-          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          {uploadedPhoto ? (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={handlePickFile}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handlePickFile()}
+              className="group relative w-full h-44 rounded-2xl overflow-hidden border border-white/10 bg-surface-container shadow-lg active:scale-[0.99] transition-transform cursor-pointer"
+            >
+              <img src={uploadedPhoto} alt="Загруженное фото" className="absolute inset-0 w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-background/85 via-background/30 to-transparent" />
+              <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                  <span className="text-[12px] text-on-surface font-medium truncate">
+                    {uploadedFileName || 'Фото комнаты'}
+                  </span>
+                </div>
+                <span className="text-[11px] uppercase tracking-wider text-on-surface-variant px-2 py-1 rounded-full border border-white/10 bg-white/[0.06]">
+                  Заменить
+                </span>
+              </div>
+              <button
+                onClick={clearPhoto}
+                className="absolute top-2 right-2 w-8 h-8 rounded-full bg-background/70 backdrop-blur-md border border-white/15 flex items-center justify-center text-on-surface hover:bg-background/90 active:scale-90 transition-all"
+                aria-label="Удалить фото"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handlePickFile}
+              className="relative w-full h-44 rounded-2xl border-2 border-dashed border-primary/50 hover:border-primary overflow-hidden bg-surface-container flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors px-4 active:scale-[0.99]"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary mb-1">
+                <ImagePlus size={22} />
+              </div>
+              <p className="text-[15px] text-on-surface font-semibold">Загрузить фото комнаты</p>
+              <p className="text-[12px] text-on-surface-variant">PNG / JPG / HEIC до 12 МБ</p>
+            </button>
+          )}
         </section>
 
         {/* Magic slider */}
