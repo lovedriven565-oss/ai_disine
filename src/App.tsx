@@ -1,33 +1,30 @@
-import { useState, useEffect } from 'react';
-import WebApp from '@twa-dev/sdk';
-import UploadScreen from './components/UploadScreen';
-import LoadingScreen from './components/LoadingScreen';
-import ResultScreen from './components/ResultScreen';
+import { useEffect } from 'react';
+import { useAppStore } from './store/useAppStore';
+import { initTelegram } from './services/telegram';
+
+import CreateFlow from './screens/CreateFlow';
+import ProfileScreen from './screens/ProfileScreen';
+import BottomTabBar from './components/ui/BottomTabBar';
+import Paywall from './components/Paywall';
 
 export default function App() {
-  const [screen, setScreen] = useState('upload'); // 'upload' | 'loading' | 'result'
+  const tab = useAppStore((s) => s.tab);
+  const createStep = useAppStore((s) => s.createStep);
+  const initSession = useAppStore((s) => s.initSession);
 
   useEffect(() => {
-    // Expand the Telegram Web App on start
-    try {
-      WebApp.ready();
-      WebApp.expand();
-    } catch (e) {
-      console.warn("Telegram WebApp is not available", e);
-    }
-  }, []);
+    initTelegram();
+    initSession();
+  }, [initSession]);
+
+  // Hide the bottom bar when the creation pipeline is mid-flight to remove UI noise.
+  const hideTabBar = tab === 'create' && createStep === 'loading';
 
   return (
-    <div className="min-h-screen bg-background text-on-background font-body-lg">
-      {screen === 'upload' && (
-        <UploadScreen onGenerate={() => setScreen('loading')} />
-      )}
-      {screen === 'loading' && (
-        <LoadingScreen onComplete={() => setScreen('result')} />
-      )}
-      {screen === 'result' && (
-        <ResultScreen onReset={() => setScreen('upload')} />
-      )}
+    <div className="min-h-screen bg-background text-on-background font-body-lg antialiased">
+      {tab === 'create' ? <CreateFlow /> : <ProfileScreen />}
+      {!hideTabBar && <BottomTabBar />}
+      <Paywall />
     </div>
   );
 }
